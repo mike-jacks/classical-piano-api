@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, relationship, declarative_base
-from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, CheckConstraint
+from sqlalchemy import MetaData, ForeignKey, CheckConstraint
 
 metadata = MetaData()
 
@@ -28,7 +28,7 @@ class ComposerTable(Base):
     name: Mapped[str] = mapped_column(nullable=False)
     home_country: Mapped[str] = mapped_column(nullable=False)
 
-    pieces: Mapped[list[PieceTable]] = relationship("PieceTable", back_populates='composer')
+    pieces: Mapped[list[PieceTable]] = relationship("PieceTable", back_populates='composer', cascade="all, delete, delete-orphan")
 
     def __repr__(self) -> str:
         return f"Composer(id={self.id!r}, name={self.name!r}, home_country={self.home_country!r})"
