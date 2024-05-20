@@ -61,11 +61,16 @@ async def add_piece(create_piece_request: CreatePieceRequest, session: Session =
     piece_data = PieceModel.model_validate(new_piece)
     return CreatePieceResponse(data=piece_data, detail="Piece added successfully.")
 
-@app.put("/composers/{composer_id}", tags=["composers"], response_model=UpdateComposerResponse, status_code=status.HTTP_200_OK) 
-async def update_composer(composer_id: int, update_composer_request: UpdateComposerRequest, session: Session = Depends(get_db)) -> UpdateComposerResponse:
+@app.put("/composers/{composer_id}", tags=["composers"], response_model=UpdateComposerResponse | CreatePieceResponse, status_code=status.HTTP_200_OK) 
+async def update_composer(composer_id: int, update_composer_request: UpdateComposerRequest, session: Session = Depends(get_db)) -> UpdateComposerResponse | CreatePieceResponse:
     composer: ComposerTable = session.execute(select(ComposerTable).where(ComposerTable.id == composer_id)).scalar_one_or_none()
     if not composer:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Composer ID: {composer_id} not found.")
+        new_composer: ComposerTable = ComposerTable(**update_composer_request.model_dump())
+        session.add(new_composer)
+        session.commit()
+        session.refresh(new_composer)
+        composer_data = ComposerModel.model_validate(new_composer)
+        return CreatePieceResponse(data=composer_data, detail="Composer added successfully.")
     old_data = ComposerModel.model_validate(composer)
     composer.name = update_composer_request.name or composer.name
     composer.home_country = update_composer_request.home_country or composer.home_country
@@ -74,17 +79,24 @@ async def update_composer(composer_id: int, update_composer_request: UpdateCompo
     new_data = ComposerModel.model_validate(composer)
     return UpdateComposerResponse(old_data=old_data, new_data=new_data, detail=f"Composer with ID: {composer_id} has been successfully updated.")
 
-@app.put("/pieces/{piece_name}", tags=["pieces"], response_model=UpdatePieceResponse, status_code=status.HTTP_200_OK)
-async def update_piece(piece_name: str, update_piece_request: UpdatePieceRequest, session: Session = Depends(get_db)) -> UpdatePieceResponse:
-    if update_piece_request.difficulty == 0:
+@app.put("/pieces/{piece_name}", tags=["pieces"], response_model=UpdatePieceResponse | CreatePieceResponse, status_code=status.HTTP_200_OK)
+async def update_piece(piece_name: str, update_piece_request: UpdatePieceRequest, session: Session = Depends(get_db)) -> UpdatePieceResponse | CreatePieceResponse:
+    if update_piece_request.difficulty == 0 | update_piece_request.difficulty > 10:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Difficulty is limited to the integers of 1 - 10 inclusively.")
-    piece: PieceTable = session.execute(select(PieceTable).where(PieceTable.name == piece_name)).scalar_one_or_none()
-    if not piece:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Piece name: '{piece_name}' not found.")
     if update_piece_request.composer_id is not None:
         composer: ComposerTable = session.execute(select(ComposerTable).where(ComposerTable.id == update_piece_request.composer_id)).scalar_one_or_none()
         if not composer:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Composer ID: {update_piece_request.composer_id} not found.")
+    piece: PieceTable = session.execute(select(PieceTable).where(PieceTable.name == piece_name)).scalar_one_or_none()
+    if not piece:
+        new_piece: PieceTable = PieceTable(**update_piece_request.model_dump())
+        session.add(new_piece)
+        try:
+            session.commit()
+            return CreatePieceResponse(data=PieceModel.model_validate(new_piece), detail="Piece added successfully.")
+        except IntegrityError as error:
+            session.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Difficulty is limited to the integers of 1 - 10 inclusively. Error: {error}")
     old_data = PieceModel.model_validate(piece)
     for attr, value in update_piece_request.model_dump(exclude_unset=True).items():
         setattr(piece, attr, value)

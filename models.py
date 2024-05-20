@@ -64,8 +64,8 @@ class CreateComposerRequest(BaseModel):
     home_country: str
 
 class UpdateComposerRequest(BaseModel):
-    name: str | None = None
-    home_country: str | None = None
+    name: str
+    home_country: str
     
 class CreatePieceRequest(BaseModel):
     name: str
@@ -74,10 +74,10 @@ class CreatePieceRequest(BaseModel):
     composer_id: int
 
 class UpdatePieceRequest(BaseModel):
-    name: str | None = None
+    name: str
     alt_name: str | None = None
-    difficulty: int | None = None
-    composer_id: int | None = None
+    difficulty: int
+    composer_id: int 
     
 
 
